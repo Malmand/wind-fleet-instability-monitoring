@@ -142,7 +142,7 @@ Emulator A overestimates tower damage during de-ratings by more than a factor of
 ### Limitations and next steps
 
 - **Not OpenFAST.** Two structural degrees of freedom, quasi-steady BEM tables (no dynamic inflow or dynamic stall), rigid blades and drivetrain, rotor-effective wind instead of a full turbulence box, generic aerofoil polars (Cp max 0.46 vs 0.48 for the NREL 5 MW). The next step would be to generate the database with OpenFAST or the in-house tool and keep the same pipeline.
-- **The prototype is simulated.** It is the same model with changed parameters, so it tests robustness to model error, not to physics the model lacks.
+- **The prototype is simulated.** It is the same model with changed parameters, so it tests robustness to model error, not to physics the model lacks. Part 3 adds a check on real measurements.
 - **Blade flap with m = 10** is dominated by a few high-wind records, and wind shear is not visible in nacelle SCADA, so flap damage on the simulated test set is underestimated (ratio 0.55). Tail-weighted training or a shear estimate (met mast, lidar or blade-load asymmetry) would help.
 - **Restorations** (ramping back up) and repeated orders in one record are not yet included.
 
