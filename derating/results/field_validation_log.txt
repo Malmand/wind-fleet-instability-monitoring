@@ -1,0 +1,21 @@
+records 1008, commanded de-ratings 52, effective 51
+detection: 46 found, 5 missed, 0 false alarms (precision 1.00, recall 0.90)
+   target  median_err_pct  p90_err_pct  damage_ratio model                     subset
+  DEL_Mtb           6.878       22.032         1.017     A                all records
+DEL_Mflap           8.019       25.060         1.360     A                all records
+ DEL_Qlss           6.699       19.602         0.929     A                all records
+  DEL_Mtb           6.517       19.319         0.891     C                all records
+DEL_Mflap           7.949       20.894         1.254     C                all records
+ DEL_Qlss           5.600       19.970         0.861     C                all records
+  DEL_Mtb          38.254       62.561         2.364     A detected de-rating records
+DEL_Mflap           8.788       32.885         1.084     A detected de-rating records
+ DEL_Qlss          10.317       32.768         1.389     A detected de-rating records
+  DEL_Mtb           6.199       15.975         0.878     C detected de-rating records
+DEL_Mflap           5.225       16.253         0.954     C detected de-rating records
+ DEL_Qlss           5.632       13.448         0.865     C detected de-rating records
+  DEL_Mtb           6.552       16.355         0.938     A              other records
+DEL_Mflap           8.008       24.516         1.388     A              other records
+ DEL_Qlss           6.552       18.271         0.896     A              other records
+  DEL_Mtb           6.572       19.501         0.891     C              other records
+DEL_Mflap           8.084       20.899         1.284     C              other records
+ DEL_Qlss           5.599       20.531         0.861     C              other records

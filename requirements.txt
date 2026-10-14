@@ -3,3 +3,4 @@ scipy
 pandas
 matplotlib
 rainflow>=3.2
+xgboost>=2.0

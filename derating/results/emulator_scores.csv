@@ -1,0 +1,19 @@
+target,median_err_pct,p90_err_pct,damage_ratio,model,test_set
+DEL_Mtb,3.509764739856558,9.604614821405235,1.01073714599491,A: normal operation only,normal
+DEL_Mflap,7.367346165843458,16.929224068136175,1.1298331061687072,A: normal operation only,normal
+DEL_Qlss,3.3579353588398755,8.7815175827488,1.018582472095596,A: normal operation only,normal
+DEL_Mtb,8.629238708120546,28.34798582846519,1.1529991506811934,A: normal operation only,derate
+DEL_Mflap,8.230929429375195,19.27100265182704,0.4081228885410358,A: normal operation only,derate
+DEL_Qlss,12.777514547702218,42.62058086281519,1.1694510966040215,A: normal operation only,derate
+DEL_Mtb,3.4314617408620074,8.959011922845532,1.0051705029579492,B: + de-rating simulations,normal
+DEL_Mflap,6.948117106621549,16.80108251340535,1.1576697618392722,B: + de-rating simulations,normal
+DEL_Qlss,3.233405464535266,8.422722261529664,0.9970673622187584,B: + de-rating simulations,normal
+DEL_Mtb,5.139006764998855,11.727001275132057,0.9534096511437579,B: + de-rating simulations,derate
+DEL_Mflap,6.40040244704389,15.501115024779581,0.5136184694433537,B: + de-rating simulations,derate
+DEL_Qlss,4.294436114871508,11.974699468607609,0.9918619716231206,B: + de-rating simulations,derate
+DEL_Mtb,3.7875921603181375,9.220117589708915,1.0090451520066819,C: + de-rating simulations and transient features,normal
+DEL_Mflap,6.351544112898755,15.452190499760034,1.0233677015114029,C: + de-rating simulations and transient features,normal
+DEL_Qlss,3.419300748993115,9.09926452025433,0.9657187503751734,C: + de-rating simulations and transient features,normal
+DEL_Mtb,5.234079309545219,11.5078915110499,0.958312800780064,C: + de-rating simulations and transient features,derate
+DEL_Mflap,6.0090456228851234,15.79860038426885,0.5543978062769849,C: + de-rating simulations and transient features,derate
+DEL_Qlss,3.559494297648569,10.318757970665175,0.988682494405379,C: + de-rating simulations and transient features,derate
