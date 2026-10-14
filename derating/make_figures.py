@@ -127,4 +127,42 @@ def fig5():
 
 
 if __name__ == "__main__":
-    fig3(); fig4(); fig5()
+    fig3(); fig4(); fig5(); fig6()
+
+
+def fig6():
+    """Real measurements, Björkö 45 kW turbine."""
+    r = pd.read_csv(RES / "bjorko_predictions.csv")
+    sc = pd.read_csv(RES / "bjorko_scores.csv")
+    fig, ax = subplots(1, 3, figsize=(7.4, 2.7))
+    a = ax[0]
+    rng = np.random.default_rng(0)
+    for k, (flag, col, mk, lab) in enumerate(((False, C["black"], "o", "Normal"), (True, C["vermillion"], "s", "Power shed"))):
+        v = r.loc[r.shed == flag, "DEL_TFA_rel"].values
+        a.scatter(k + rng.uniform(-0.15, 0.15, v.size), v, s=7, marker=mk, facecolors="none", edgecolors=col, lw=0.6)
+        q = np.percentile(v, [25, 50, 75])
+        a.errorbar(k + 0.3, q[1], yerr=[[q[1] - q[0]], [q[2] - q[1]]], color=col, marker="_", ms=10, capsize=3, lw=1)
+    a.axhline(1, color="k", lw=0.5, ls=":")
+    a.set_xticks([0, 1]); a.set_xticklabels([f"Normal\n(n = {int((~r.shed).sum())})", f"Power shed\n(n = {int(r.shed.sum())})"])
+    a.set_xlim(-0.5, 1.6)
+    a.set_ylabel("Tower FA DEL, measured / expected")
+    a = ax[1]
+    d = r[r.shed]
+    a.scatter(d.DEL_RST2, d.predA_DEL_RST2, s=12, marker="o", facecolors="none", edgecolors=C["orange"], lw=0.8, label="A")
+    a.scatter(d.DEL_RST2, d.predC_DEL_RST2, s=10, marker="s", color=C["blue"], lw=0, label="C")
+    lim = [0, max(d.DEL_RST2.max(), d.predA_DEL_RST2.max()) * 1.1]
+    a.plot(lim, lim, color="k", lw=0.6); a.set_xlim(lim); a.set_ylim(lim)
+    a.set_xlabel("Measured shaft-torque DEL (Nm)"); a.set_ylabel("Emulator estimate (Nm)")
+    a.legend(frameon=False, loc="upper left", title="Emulator", title_fontsize=7)
+    a = ax[2]
+    s = sc[sc.subset == "shedding"]
+    w = 0.36
+    for k, (m, col) in enumerate(((s.model.unique()[0], C["orange"]), (s.model.unique()[1], C["blue"]))):
+        v = s[s.model == m].set_index("target").loc[["DEL_TFA", "DEL_TSS", "DEL_RST2"]]
+        a.bar(np.arange(3) + (k - 0.5) * w, v.p90_err_pct, w, color=col, edgecolor="k", lw=0.4, label=m.split(":")[0])
+    a.set_xticks(range(3)); a.set_xticklabels(["Tower FA", "Tower SS", "Shaft"])
+    a.set_ylabel("90th-percentile DEL error (%)")
+    a.legend(frameon=False, title="Emulator", title_fontsize=7)
+    for a, l in zip(ax, "ABC"):
+        panel(a, l, x=-0.3)
+    save(fig, FIG / "fig6_bjorko_measurements.png")

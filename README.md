@@ -4,6 +4,7 @@ Two parts:
 
 1. **Fleet monitoring** of one type of aeroelastic event, edgewise blade instability of idling turbines (steps 1-2 below).
 2. **Load emulator for power de-rating transients** (`derating/`, steps 3-5): a reduced-order aero-servo-elastic turbine model, a simulation database, a machine-learning load emulator extended to commanded power reductions, and validation against field-like prototype data. See [Part 2](#part-2-load-emulator-for-power-de-rating-transients).
+3. **Check on real measurements** (step 6): measured tower and shaft loads of a research turbine during frequency-control power shedding. See [Part 3](#part-3-check-on-real-measurements-bjorko-45-kw-turbine).
 
 ## Part 1: fleet monitoring
 
@@ -28,6 +29,7 @@ cd derating                       # Part 2
 python step3_derating_database.py # 2,500 10-min simulations, about 1 min
 python step4_train_emulator.py    # emulators A, B, C and sensitivity sweeps, about 2 min
 python step5_field_validation.py  # one week of prototype data, event identification, comparison
+python step6_bjorko_validation.py # real measurements (condensed file included in derating/data)
 python make_figures.py
 ```
 
@@ -157,3 +159,29 @@ step5_field_validation.py   prototype week, event identification, measured vs es
 make_figures.py             figures 3-5
 ../tests/test_derating.py   power curve, order tracking and event identification checks
 ```
+
+## Part 3: check on real measurements (Björkö 45 kW turbine)
+
+Simulated "field" data can only test robustness to model error. To test the method on physics the model does not contain, I used the open high-frequency dataset of the Chalmers research turbine on Björkö, Sweden (45 kW, 30 m wooden tower, 20 Hz, CC BY 4.0; Fogelström et al., Zenodo, [doi:10.5281/zenodo.8230330](https://doi.org/10.5281/zenodo.8230330)). During the campaign the turbine ran frequency-control tests (FCR-N, FCR-D) and manual power shedding, and the controller logged the power it removed (`Pwaste`), next to calibrated tower-base moments and a shaft-torque strain gauge.
+
+`tools/prepare_bjorko.py` condenses the 2.8 GB file into 10-min records (SCADA statistics, logged control signals, transient descriptors and 1 Hz DELs of tower fore-aft and side-side moments, rotated with the yaw angle, and shaft torque). It ran on a GitHub Actions runner (`tools/bjorko_github_workflow.yml`); the condensed file is `derating/data/bjorko_10min.csv.gz`. After filtering, 265 running records (44 hours on 34 days) remain, 39 of them with power shedding on 7 days. All model tests use leave-one-day-out cross-validation.
+
+**Results**
+
+- **Power shedding raised tower fore-aft fatigue.** Compared with the DEL expected from the mast wind speed and turbulence alone, shedding records had a median tower fore-aft DEL 19% higher (normal records: 0%). The simulations of Part 2 predicted the same direction below rated wind, where a reduction hands control of rotor speed to the pitch loop (about +25%). Side-side and shaft DELs did not change in the median.
+- **Emulator trained on normal operation only (A) vs with shedding records and set-point features (C)**, on the shedding records:
+
+| | Tower FA | Tower SS | Shaft torque |
+|---|---|---|---|
+| Median DEL error, A / C | 11% / 9% | 6% / 7% | 20% / 12% |
+| 90th-percentile error, A / C | 25% / 28% | 16% / 16% | 83% / 44% |
+| Estimated / measured damage, A / C | 0.34 / 0.41 | 0.98 / 0.91 | 0.71 / 1.00 |
+
+  The clearest gain is on the shaft, where emulator A overestimated the low-load shedding records of one day by up to 80%. The tower fore-aft damage is underestimated by both, because one shedding record at 10.6 m/s with a constant 5 kW shed has a DEL three times higher than anything in training; with 39 shedding records on 7 days, such cases cannot be learned.
+- **The SCADA-only detection rule of Part 2 does not transfer.** This turbine regulates rotor speed with pitch already at moderate wind, so pitch activity below rated is common in normal operation: the rule found 27 of 39 shedding records but raised 64 false alarms. On a real platform the operator set-point is logged and should be used directly; a SCADA-only detector has to be tuned to the controller of each platform.
+
+![Real measurements](figures/fig6_bjorko_measurements.png)
+
+*A: tower fore-aft DEL relative to the value expected from ambient wind, normal vs power-shed records (median and interquartile range). B: shaft-torque DEL on shedding records, measured vs estimated. C: 90th-percentile DEL error on shedding records.*
+
+**Limits.** A 45 kW turbine with a wooden tower is far from a multi-megawatt platform, the shedding tests cover 7 days, and the blade-root strain gauges in this dataset are uncalibrated, so blade loads are not used.

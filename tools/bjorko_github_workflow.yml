@@ -1,0 +1,59 @@
+name: Condense Björkö turbine data
+on:
+  push:
+    branches: [bjorko-data]
+    paths: ['.github/workflows/bjorko.yml', 'tools/prepare_bjorko.py']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bjorko
+  cancel-in-progress: true
+jobs:
+  condense:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pandas numpy rainflow
+      - name: Restore cached download
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: work/B1_CL4_20.csv
+          key: bjorko-b1-cl4-20-v3
+      - name: Download 20 Hz data from Zenodo (10.5281/zenodo.8230330), resuming if the connection drops
+        run: |
+          mkdir -p work
+          if [ "$(stat -c %s work/B1_CL4_20.csv 2>/dev/null || echo 0)" -ge 2759263180 ]; then echo "cached"; exit 0; fi
+          sudo apt-get -qq install -y aria2 > /dev/null
+          # 16 parallel ranged connections: Zenodo throttles each connection, not the total
+          aria2c -x16 -s16 -k20M --max-tries=20 --retry-wait=10 --summary-interval=60 -d work -o B1_CL4_20.csv \
+            "https://zenodo.org/records/8230330/files/B1_CL4_20.csv?download=1" | tail -5 | tee -a work/prepare_log.txt
+          ls -la work
+          [ "$(stat -c %s work/B1_CL4_20.csv)" -ge 2759263180 ]
+      - name: Save download to cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: work/B1_CL4_20.csv
+          key: bjorko-b1-cl4-20-v3
+      - name: Condense
+        working-directory: work
+        run: |
+          set -o pipefail
+          python ../tools/prepare_bjorko.py B1_CL4_20.csv 2>&1 | tee -a prepare_log.txt
+      - name: Commit results
+        if: always()
+        run: |
+          mkdir -p data/bjorko
+          cp work/bjorko_* work/prepare_log.txt data/bjorko/ 2>/dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/bjorko
+          git commit -m "Björkö condensed data [skip ci]" || echo "nothing to commit"
+          git pull --rebase origin bjorko-data || true
+          git push
