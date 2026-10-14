@@ -177,7 +177,7 @@ Simulated "field" data can only test robustness to model error. To test the meth
 | 90th-percentile error, A / C | 25% / 28% | 16% / 16% | 83% / 44% |
 | Estimated / measured damage, A / C | 0.34 / 0.41 | 0.98 / 0.91 | 0.71 / 1.00 |
 
-  The clearest gain is on the shaft, where emulator A overestimated the low-load shedding records of one day by up to 80%. The tower fore-aft damage is underestimated by both, because one shedding record at 10.6 m/s with a constant 5 kW shed has a DEL three times higher than anything in training; with 39 shedding records on 7 days, such cases cannot be learned.
+  The clearest gain is on the shaft, where emulator A overestimated the low-load shedding records of one day by up to 130%. The tower fore-aft damage is underestimated by both, because one shedding record (8.7 m/s mast wind, constant 5 kW shed) has a DEL nearly twice as high as any other record; with 39 shedding records on 7 days, such cases cannot be learned.
 - **The SCADA-only detection rule of Part 2 does not transfer.** This turbine regulates rotor speed with pitch already at moderate wind, so pitch activity below rated is common in normal operation: the rule found 27 of 39 shedding records but raised 64 false alarms. On a real platform the operator set-point is logged and should be used directly; a SCADA-only detector has to be tuned to the controller of each platform.
 
 ![Real measurements](figures/fig6_bjorko_measurements.png)
