@@ -1,0 +1,5 @@
+numpy
+scipy
+pandas
+matplotlib
+rainflow>=3.2

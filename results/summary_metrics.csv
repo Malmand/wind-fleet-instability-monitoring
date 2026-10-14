@@ -1,0 +1,12 @@
+,value
+true_events,54.0
+detected,53.0
+false_alarms,0.0
+missed,1.0
+precision,1.0
+recall,0.9815
+unstable_below_threshold,9.0
+zeta_est_vs_true_mae,0.0001
+event_share_of_damage_pct,61.6124
+event_share_of_time_pct,0.1646
+damage_rate_ratio_event_vs_normal,973.607
