@@ -47,6 +47,7 @@ def pitch_schedule(wn=0.6, zeta=0.7):
         th.append(t0); sens.append(d[0] / np.radians(1.0))
     th, sens = np.array(th), np.array(sens)
     o = np.argsort(th); th, sens = th[o], sens[o]
+    # PI gains by pole placement (wn, zeta)
     kp = 2 * J_ROT * wr * zeta * wn / (N_GEAR * -sens)
     ki = J_ROT * wr * wn ** 2 / (N_GEAR * -sens)
     return th, kp, ki
@@ -66,6 +67,7 @@ K_OPT = 0.5 * RHO * A * R ** 3 * CP_MAX / TSR_OPT ** 3 / N_GEAR ** 3   # generat
 TG_RATED = P_RATED / (ETA * W_RATED_G)
 W_SYNC = W_RATED_G / 1.10
 SLOPE25 = TG_RATED / (0.99 * W_RATED_G - W_SYNC)
+# where K w^2 meets the region 2.5 line
 W_25 = (SLOPE25 - np.sqrt(SLOPE25 ** 2 - 4 * K_OPT * SLOPE25 * W_SYNC)) / (2 * K_OPT)
 
 
@@ -74,7 +76,7 @@ PI_GAINS = None
 
 def lookup(tab, lam, beta):
     """Bilinear interpolation in a (tsr, pitch) table, vectorised."""
-    x = np.clip((lam - TSR[0]) / (TSR[1] - TSR[0]), 0, TSR.size - 1.001)
+    x = np.clip((lam - TSR[0]) / (TSR[1] - TSR[0]), 0, TSR.size - 1.001)  # fractional index; uniform grid assumed
     y = np.clip((beta - PITCH[0]) / (PITCH[1] - PITCH[0]), 0, PITCH.size - 1.001)
     i, j = x.astype(int), y.astype(int)
     fx, fy = x - i, y - j
@@ -128,9 +130,10 @@ def kaimal_wind(V, ti, n, dt, rng):
     f = np.fft.rfftfreq(n, dt)[1:]
     L = 340.2
     sig = ti * V
+    # Kaimal (IEC 61400-1)
     S = sig[:, None] ** 2 * 4 * L / V[:, None] / (1 + 6 * f[None, :] * L / V[:, None]) ** (5 / 3)
     S = S / (1 + (f[None, :] * 2 * R / V[:, None]) ** 2)                    # rotor averaging
-    amp = np.sqrt(S * f[0] / 2) * n
+    amp = np.sqrt(S * f[0] / 2) * n  # one-sided PSD -> FFT amplitudes
     ph = rng.uniform(0, 2 * np.pi, amp.shape)
     spec = np.concatenate([np.zeros((V.size, 1)), amp * np.exp(1j * ph)], axis=1)
     u = np.fft.irfft(spec, n=n, axis=1)
@@ -154,7 +157,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
     k_t = prm["m_twr"] * (2 * np.pi * prm["f_twr"]) ** 2
     c_t = 2 * prm["zeta_twr"] * np.sqrt(k_t * prm["m_twr"])
     lam0 = wr * R / V
-    x = 0.5 * RHO * A * V ** 2 * lookup(CT, lam0, beta) / k_t
+    x = 0.5 * RHO * A * V ** 2 * lookup(CT, lam0, beta) / k_t  # start at the static tower deflection
     xd = np.zeros(nb); psi = np.zeros(nb)
     th_s, kp_s, ki_s = PI_GAINS
     integ = np.radians(beta)                                  # integral term, stored in pitch units (rad)
@@ -172,7 +175,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
         arm = (ts >= t0) & np.isnan(p_start)
         p_start[arm] = np.minimum(p0, p_el)[arm]
         p_ref = np.where(ts < t0, p0, np.maximum(p1, np.nan_to_num(p_start) - rate * (ts - t0)))
-        vrel = U[:, s] - xd
+        vrel = U[:, s] - xd  # wind relative to the moving tower top
         wg = wr * N_GEAR
         lam = wr * R / np.maximum(vrel, 1.0)
         q = 0.5 * RHO * A * vrel ** 2
@@ -193,7 +196,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
         beta = beta + np.clip(cmd - beta, -prm["pitch_rate"] * dt, prm["pitch_rate"] * dt)
         # tower
         xdd = (thrust - c_t * xd - k_t * x) / prm["m_twr"]
-        xd = xd + xdd * dt; x = x + xd * dt
+        xd = xd + xdd * dt; x = x + xd * dt  # semi-implicit Euler
         wr = np.maximum(wr + wr_dot * dt, 0.1)
         psi = psi + wr * dt
         if keep[s]:

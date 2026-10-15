@@ -6,7 +6,7 @@ import turbine as tb
 
 M_SLOPE = {"Mtb": 4, "Mflap": 10, "Qlss": 4}       # Wohler exponents: steel tower, composite blade, steel shaft
 N_EQ = 600                                          # 1 Hz equivalent over 10 min
-P = tb.P_RATED
+P = tb.P_RATED  # W
 
 
 def del_1hz(x, m):
@@ -62,7 +62,7 @@ def transient_features(Pw, pitch, wg):
     drop = (run_max - Ps).max(1)                      # largest drop from a previous maximum
     rate = np.clip(-dP5.min(1) / 5, 0, None)          # steepest decrease (fraction of rated per s)
     pr = (ps[:, 5:] - ps[:, :-5]).max(1) / 5          # steepest pitch increase (deg/s)
-    over = (wg.max(1) - np.median(wg, 1)) / tb.W_RATED_G * 30 / np.pi * 100
+    over = (wg.max(1) - np.median(wg, 1)) / tb.W_RATED_G * 30 / np.pi * 100  # % of rated speed (wg in rpm)
     return pd.DataFrame(dict(drop=drop, drop_rate=rate, pitch_rate_max=pr, overspeed=over,
                              P_end_start=(Ps[:, -30:].mean(1) - Ps[:, :30].mean(1))))
 

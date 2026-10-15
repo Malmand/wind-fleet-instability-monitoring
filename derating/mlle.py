@@ -17,7 +17,7 @@ class Emulator:
         for t in TARGETS:
             m = XGBRegressor(n_estimators=600, learning_rate=0.03, max_depth=5, subsample=0.8,
                              colsample_bytree=0.8, min_child_weight=3, random_state=self.seed)
-            m.fit(df[self.features].values, np.log(df[t].values))
+            m.fit(df[self.features].values, np.log(df[t].values))  # log target: errors relative, DEL > 0
             self.models[t] = m
         return self
 
@@ -33,7 +33,7 @@ def scores(df, pred):
     for t, m in TARGETS.items():
         y, p = df[t].values.astype(float), pred[t].values.astype(float)
         e = np.abs(p / y - 1) * 100
-        ref = y.max()
+        ref = y.max()  # normalise before ^m to avoid overflow
         rows[t] = dict(median_err_pct=np.median(e), p90_err_pct=np.percentile(e, 90),
                        damage_ratio=((p / ref) ** m).sum() / ((y / ref) ** m).sum())
     return pd.DataFrame(rows).T

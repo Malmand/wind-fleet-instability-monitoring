@@ -61,7 +61,7 @@ def solve(tsr, pitch_deg, n_iter=200):
         sphi = np.maximum(np.abs(np.sin(phi)), 1e-4)
         F = (2 / np.pi) * np.arccos(np.exp(-B / 2 * (R - r) / (r * sphi))) * \
             (2 / np.pi) * np.arccos(np.exp(-B / 2 * (r - R_HUB) / (R_HUB * sphi)))
-        F = np.maximum(F, 1e-4)
+        F = np.maximum(F, 1e-4)  # avoid division by zero at tip and hub
         k = sigma * cn / (4 * F * sphi ** 2)
         a_new = k / (1 + k)
         # Buhl correction for heavily loaded elements
@@ -72,7 +72,7 @@ def solve(tsr, pitch_deg, n_iter=200):
             a_new[hi] = (18 * Fh - 20 - 3 * np.sqrt(np.maximum(C * (50 - 36 * Fh) + 12 * Fh * (3 * Fh - 4), 0))) / (36 * Fh - 50)
         ap_new = 1 / (4 * F * sphi * np.cos(phi) / (sigma * ct) - 1) if np.all(ct != 0) else ap
         ap_new = np.clip(np.nan_to_num(ap_new), -0.5, 0.5)
-        a = 0.7 * a + 0.3 * np.clip(a_new, -0.5, 0.95)
+        a = 0.7 * a + 0.3 * np.clip(a_new, -0.5, 0.95)  # relaxation for convergence
         ap = 0.7 * ap + 0.3 * ap_new
     W2 = ((1 - a) ** 2 + (lam_r * (1 + ap)) ** 2)            # (W / V)^2
     dFn = 0.5 * W2 * chord * cn * dr                           # per unit rho V^2, per blade

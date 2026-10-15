@@ -57,7 +57,7 @@ def main():
     dmg_event = ev.damage.sum()
     dmg_total = ok.damage.sum()
     hours_event = ev.duration_s.sum() / 3600
-    hours_total = len(ok) / 6
+    hours_total = len(ok) / 6  # six 10-min records per hour
     fat = dict(event_share_of_damage_pct=100 * dmg_event / dmg_total,
                event_share_of_time_pct=100 * hours_event / hours_total,
                damage_rate_ratio_event_vs_normal=(dmg_event / max(hours_event, 1e-9)) /
@@ -68,6 +68,7 @@ def main():
                                  event_hours=g.loc[g.event, "duration_s"].sum() / 3600,
                                  max_peak_kNm=g.peak_kNm.max() if g.event.any() else 0.0,
                                  damage_share_events_pct=100 * g.loc[g.event, "damage"].sum() / g.damage.sum(),
+                                 # m = 10, 600 cycles per record
                                  del_10min_kNm=(g.damage.sum() / (600 * len(g))) ** 0.1)),
         include_groups=False).reset_index()
     expected = 14 * 144                                     # 10-min records in the period

@@ -34,9 +34,9 @@ def despike(x, k=8.0):
     from scipy.ndimage import median_filter
     med = median_filter(x, size=9, mode="nearest")
     dev = np.abs(x - med)
-    mad = np.median(dev) * 1.4826 + 1e-9
+    mad = np.median(dev) * 1.4826 + 1e-9  # MAD -> robust sd
     y = x.copy()
-    bad = dev > k * mad + 500
+    bad = dev > k * mad + 500  # +500 kNm: ignore small deviations on quiet records
     y[bad] = med[bad]
     return y, int(bad.sum())
 
@@ -45,7 +45,7 @@ def envelope(x, fs):
     sos = butter(4, BAND, btype="band", fs=fs, output="sos")
     xb = sosfiltfilt(sos, x)
     env = np.abs(hilbert(xb))
-    win = int(5 * fs)
+    win = int(5 * fs)  # 5 s moving average of the envelope
     return xb, np.convolve(env, np.ones(win) / win, mode="same")
 
 
@@ -77,7 +77,7 @@ def detect(x, fs):
         try:
             p, _ = curve_fit(logistic, t, env[: i_pk + 1], p0=[peak, 0.05, t[np.argmax(env > 0.5 * peak)], 0.0],
                              bounds=([0, 1e-4, 0, -peak], [2 * peak, 2.0, t[-1] * 2, peak]), maxfev=5000)
-            zeta = -p[1] / (2 * np.pi * f_dom)
+            zeta = -p[1] / (2 * np.pi * f_dom)  # growth rate sigma = -zeta * omega
         except RuntimeError:
             pass
     return dict(start_s=s / fs, duration_s=(e - s) / fs, peak_kNm=float(peak), freq_hz=float(f_dom),

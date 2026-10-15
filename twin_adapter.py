@@ -24,7 +24,7 @@ def run(payload: str) -> str:
     for k, typ in OUTPUT_SCHEMA.items():
         v = out.get(k)
         if v is None or (isinstance(v, float) and math.isnan(v)):
-            clean[k] = None
+            clean[k] = None  # NaN is not valid JSON
         else:
             clean[k] = typ(v)
     return json.dumps(clean)

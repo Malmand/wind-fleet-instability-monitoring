@@ -143,7 +143,7 @@ def main():
             ch = pd.concat([carry, ch], ignore_index=True)
         rec = np.floor(ch["Time"].values / REC) * REC
         last = rec.max()
-        carry = ch[rec == last]
+        carry = ch[rec == last]  # last record may continue in the next chunk
         ch = ch[rec < last]; rec = rec[rec < last]
         for t0, g in ch.groupby(rec):
             if len(g) < MIN_FILL * REC * FS:
@@ -156,13 +156,14 @@ def main():
                 continue
             rows.append(r)
             if r.get("PwrPct_drop", 0) > 0.15 or r.get("Pwaste_max", 0) > 2000:
+                # Pwaste as share of 45 kW
                 cand.append((r.get("PwrPct_drop", 0) + r.get("Pwaste_max", 0) / 45e3, t0, "reduction"))
         print(f"chunk {k}: {len(rows)} records so far", flush=True)
     if carry is not None and len(carry) >= MIN_FILL * REC * FS:          # last record of the file
         rows.append(record_stats(np.floor(carry["Time"].iloc[0] / REC) * REC, carry))
     df = pd.DataFrame(rows)
     # LabVIEW time: seconds since 1904-01-01 UTC
-    df.insert(1, "time_utc", pd.to_datetime(df.t_start - 2082844800, unit="s", utc=True))
+    df.insert(1, "time_utc", pd.to_datetime(df.t_start - 2082844800, unit="s", utc=True))  # 1904 -> 1970 epoch
     df.to_csv("bjorko_10min.csv.gz", index=False, float_format="%.6g")
     print(f"wrote bjorko_10min.csv.gz with {len(df)} records")
 

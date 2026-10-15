@@ -29,6 +29,7 @@ AMB = ["WS30_mean", "WS30_std"]
 
 def load():
     d = pd.read_csv(HERE / "data" / "bjorko_10min.csv.gz", parse_dates=["time_utc"])
+    # running, >= 95 % of 20 Hz samples
     r = d[(d.frac_running > 0.99) & (d.n >= 0.95 * 12000) & (d.WS30_mean > 0.5)].copy()
     r["shed"] = r.Pwaste_mean > 500                     # more than about 1% of rated power shed on average
     r["day"] = r.time_utc.dt.date.astype(str)
@@ -92,7 +93,7 @@ if __name__ == "__main__":
         OUT / "bjorko_predictions.csv", index=False)
 
     # 3. does the step-5 idea (pitch activity below rated wind flags a reduction) transfer?
-    det = (r.PAB1_std > 0.3) & (r.WS30_mean < 9)
+    det = (r.PAB1_std > 0.3) & (r.WS30_mean < 9)  # pitching below rated wind
     tp, fp, fn = int((det & r.shed).sum()), int((det & ~r.shed).sum()), int((~det & r.shed).sum())
     print(f"\npitch-activity rule: {tp} found, {fn} missed, {fp} false alarms "
           f"(precision {tp / max(tp + fp, 1):.2f}, recall {tp / max(tp + fn, 1):.2f})")

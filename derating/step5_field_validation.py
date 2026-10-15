@@ -26,9 +26,9 @@ def field_week(n=1008, seed=7):
     # mean wind: slowly varying (AR(1), 10-min steps) with a Weibull-like marginal (A = 9.5 m/s, k = 2.1)
     z = np.zeros(n)
     for i in range(1, n):
-        z[i] = 0.985 * z[i - 1] + np.sqrt(1 - 0.985 ** 2) * rng.normal()
-    u = ndtr(z)
-    V = np.clip(9.5 * (-np.log(1 - np.clip(u, 1e-4, 1 - 1e-4))) ** (1 / 2.1), 3.5, 25)
+        z[i] = 0.985 * z[i - 1] + np.sqrt(1 - 0.985 ** 2) * rng.normal()  # unit variance AR(1)
+    u = ndtr(z)  # Gaussian AR(1) -> uniform
+    V = np.clip(9.5 * (-np.log(1 - np.clip(u, 1e-4, 1 - 1e-4))) ** (1 / 2.1), 3.5, 25)  # inverse Weibull CDF
     shear = np.clip(0.2 + 0.08 * np.sin(np.arange(n) * 2 * np.pi / 144) + 0.03 * rng.normal(size=n), 0.05, 0.35)
     rows = []
     for i in range(n):
