@@ -50,9 +50,9 @@ def field_week(n=1008, seed=7):
     return c
 
 
-def available_power(V):
-    """Steady available power (fraction of rated) of the design turbine at mean wind V."""
-    return np.minimum(1.0, 0.5 * tb.RHO * tb.A * V ** 3 * tb.CP_MAX * tb.ETA / tb.P_RATED)
+def available_power(V, cp_scale=1.0):
+    """Steady available power (fraction of rated) at mean wind V; cp_scale = 1 for the design turbine."""
+    return np.minimum(1.0, 0.5 * tb.RHO * tb.A * V ** 3 * tb.CP_MAX * cp_scale * tb.ETA / tb.P_RATED)
 
 
 def identify_events(Pw, pitch, wg):
@@ -99,7 +99,7 @@ if __name__ == "__main__":
         if b0 == 0:
             series.append({k: v[:60] for k, v in r.items()})
     f = pd.concat(out, ignore_index=True)
-    f["P_avail"] = available_power(f.V)
+    f["P_avail"] = available_power(f.V, PROTO["cp_scale"])   # what the prototype rotor can actually deliver
     # a commanded reduction that actually cuts output: below the available power by at least 5% of rated
     f["effective"] = (f.kind == "derate") & (np.minimum(f.p0, f.P_avail) - f.p1 >= 0.05)
     models = pickle.load(open(OUT / "emulators.pkl", "rb"))

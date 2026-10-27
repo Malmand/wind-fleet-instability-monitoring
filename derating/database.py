@@ -62,20 +62,20 @@ def transient_features(Pw, pitch, wg):
     drop = (run_max - Ps).max(1)                      # largest drop from a previous maximum
     rate = np.clip(-dP5.min(1) / 5, 0, None)          # steepest decrease (fraction of rated per s)
     pr = (ps[:, 5:] - ps[:, :-5]).max(1) / 5          # steepest pitch increase (deg/s)
-    over = (wg.max(1) - np.median(wg, 1)) / tb.W_RATED_G * 30 / np.pi * 100  # % of rated speed (wg in rpm)
+    over = (wg.max(1) - np.median(wg, 1)) / (tb.W_RATED_G * 30 / np.pi) * 100  # % of rated speed (wg in rpm)
     return pd.DataFrame(dict(drop=drop, drop_rate=rate, pitch_rate_max=pr, overspeed=over,
                              P_end_start=(Ps[:, -30:].mean(1) - Ps[:, :30].mean(1))))
 
 
-def run_cases(cases, prm_cols=(), seed=0, batch=200, keep_series=False):
+def run_cases(cases, prm_cols=(), seed=0, batch=200, keep_series=False, common_wind=False):
     """Simulate every case. Columns named in prm_cols (e.g. f_twr, cp_scale) override model parameters
-    per case, as for the perturbed field turbines."""
+    per case, as for the perturbed field turbines. common_wind=True gives every case in a batch the same gusts."""
     out, series = [], []
     for b0 in range(0, len(cases), batch):
         c = cases.iloc[b0:b0 + batch]
         prm = tb.default_params(shear=c.shear.values, **{k: c[k].values for k in prm_cols})
         r = tb.simulate(c.V.values, c.TI_in.values, c.p0.values * P, c.p1.values * P, c.rate.values * P,
-                        c.t0.values, prm=prm, seed=seed + b0)
+                        c.t0.values, prm=prm, seed=seed + b0, common_wind=common_wind)
         std, tr = scada_features(r)
         tgt = pd.DataFrame({f"DEL_{k}": [del_1hz(x, m) for x in r[k]] for k, m in M_SLOPE.items()})
         tgt["Mtb_range"] = np.ptp(r["Mtb"], axis=1)          # extreme-load indicator (kNm)

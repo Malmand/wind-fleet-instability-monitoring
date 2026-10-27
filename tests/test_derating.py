@@ -31,6 +31,19 @@ def test_event_identification():
     assert list(flag) == [False, True, False, True]
 
 
+def test_minimum_rotor_speed():
+    r = tb.simulate(np.array([4.0, 5.0]), 0.15, tb.P_RATED, tb.P_RATED, 0, 1e9, t_sim=300, seed=2)
+    assert (r["wg"].min(1) > 0.97 * 670.0).all()                         # region 1.5 holds the speed above ~6.9 rpm
+    wr, _ = tb.steady_state(np.array([4.0]), tb.P_RATED, tb.default_params())
+    assert wr[0] * 30 / np.pi < 0.95 * tb.W_RATED_G / tb.N_GEAR * 30 / np.pi  # light-wind start is not at rated speed
+
+
+def test_common_wind():
+    r = tb.simulate(np.array([10.0, 10.0]), 0.12, tb.P_RATED, tb.P_RATED, 0, 1e9, t_sim=120, seed=4, common_wind=True)
+    assert np.allclose(r["wind"][0], r["wind"][1])                       # paired runs share the same gusts
+
+
 if __name__ == "__main__":
-    for f in (test_rotor_and_power_curve, test_power_order_is_followed, test_event_identification):
+    for f in (test_rotor_and_power_curve, test_power_order_is_followed, test_event_identification,
+              test_minimum_rotor_speed, test_common_wind):
         f(); print("ok", f.__name__)

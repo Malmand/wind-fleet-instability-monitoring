@@ -96,34 +96,34 @@ Wind turbines take part more and more in balancing and ancillary-service markets
 | Step | What it does |
 |---|---|
 | Rotor aerodynamics | Blade element momentum (Prandtl tip and hub losses, Glauert/Buhl correction) on the NREL 5 MW blade geometry; Cp, Ct and blade-root flap tables over tip-speed ratio and pitch (`bem.py`) |
-| Aero-servo-elastic model | Rotor speed and first tower fore-aft mode, aerodynamics evaluated with the wind relative to the moving tower top (so aerodynamic damping is captured), turbulent rotor-effective wind (Kaimal); baseline controller with region 2.5, constant power above rated and a gain-scheduled PI pitch loop tuned by pole placement to this rotor; an operator power reference that ramps down from the current output (`turbine.py`) |
+| Aero-servo-elastic model | Rotor speed and first tower fore-aft mode, aerodynamics evaluated with the wind relative to the moving tower top (so aerodynamic damping is captured), turbulent rotor-effective wind (Kaimal); baseline controller with a minimum-speed region 1.5 (670-871 rpm generator speed, as in the NREL 5 MW controller), region 2.5, constant power above rated and a gain-scheduled PI pitch loop tuned by pole placement to this rotor; an operator power reference that ramps down from the current output (`turbine.py`) |
 | Simulation database | 1,000 normal-operation and 1,500 de-rating cases sampled over wind speed (4-25 m/s), turbulence (IEC NTM), shear, initial and final power and ramp rate (0.2 to 20 % of rated per second); 10-min SCADA statistics and transient descriptors as inputs, 1 Hz damage-equivalent loads (DEL) of tower base (m = 4), blade-root flap (m = 10) and shaft torque (m = 4) as targets (`database.py`, step 3) |
 | Emulator | Gradient-boosted trees on log DEL (`mlle.py`). **A**: trained on normal operation only. **B**: with de-rating simulations. **C**: with de-rating simulations and transient features (power drop, steepest ramp, pitch rate, overspeed) |
-| Sensitivity | Controlled sweeps of ramp rate and initial and final power at 8, 12 and 18 m/s with common turbulence seeds; simulated vs emulated DEL ratio (step 4) |
+| Sensitivity | Controlled sweeps of ramp rate and initial and final power at 8, 12 and 18 m/s with identical gusts in every run of a batch, so each order is compared with a no-order run in the same wind; simulated vs emulated DEL ratio (step 4) |
 | Field validation | One week (1,008 records) from a stand-in prototype the emulator has never seen: softer, better-damped tower, 3% lower rotor efficiency, retuned pitch gains, an anemometer reading 4% low and strain-gauge calibration errors; grid-service orders (curtailment, aFRR, fast frequency reserve); events identified from SCADA alone; measured vs estimated DEL and fatigue damage (step 5) |
 
 ### Results
 
-**A de-rating changes the load picture, and in different directions.** Below rated wind (8 m/s), a reduction pushes the rotor to rated speed and the pitch loop takes over, so the tower is regulated by pitch and loses some aerodynamic damping: tower-base DEL rises by up to about 25%. At 12 and 18 m/s the lower thrust reduces tower DEL by 10-20%. The shaft is the opposite: at 18 m/s the torque step itself is one large cycle, so a deep reduction (to 10% of rated) raises shaft DEL by about 80%. Within 10-min records, the ramp rate (0.2-20 %/s) changed DELs much less than the depth of the reduction and the wind speed; its main effect is on peak tower moment.
+**A de-rating changes the load picture, and in different directions.** Below rated wind (8 m/s), a reduction pushes the rotor to rated speed and the pitch loop takes over, so the tower is regulated by pitch and loses some aerodynamic damping: tower-base DEL rises by up to about 26% (largest for a reduction to 30-40% of rated). At 12 and 18 m/s the lower thrust reduces tower DEL by about 15%. The shaft is the opposite: at 18 m/s the torque step itself is one large cycle, so a deep reduction (to 10% of rated) raises shaft DEL by about 78%, while at 8 m/s, where there is little torque to shed, shaft DEL falls by about 45%. Within 10-min records, the ramp rate (0.2-20 %/s) changed DELs and the peak tower moment by only a few percent: the depth of the reduction and the wind speed matter far more.
 
 **The emulator needs to have seen transients.** On held-out de-rating simulations:
 
 | Emulator | Tower base, p90 error | Blade flap, p90 error | Shaft, p90 error |
 |---|---|---|---|
-| A: normal operation only | 28% | 19% | 43% |
-| B: + de-rating simulations | 12% | 16% | 12% |
-| C: + transient features | 12% | 16% | 10% |
+| A: normal operation only | 28% | 20% | 46% |
+| B: + de-rating simulations | 11% | 16% | 11% |
+| C: + transient features | 12% | 16% | 11% |
 
-In the sweeps, emulator C reproduces the simulated sensitivity to final power level and wind within a median 2-3%.
+Most of the gain comes from including de-rating simulations in training; the transient features add little once they are there. In the sweeps, emulator C reproduces the simulated sensitivity to final power level and wind within a median 2-6% (blade flap 2%, shaft 3%, tower 6%).
 
-**Field validation.** Of 51 effective de-ratings in the prototype week, 46 were identified from power, pitch and rotor speed alone with no false alarms (precision 1.00, recall 0.90); the 5 missed events start late in a record and would be caught in the following one on continuous data. On the identified event records:
+**Field validation.** Of 49 effective de-ratings in the prototype week (orders that cut the prototype's available power by at least 5% of rated), 45 were identified from power, pitch and rotor speed alone (recall 0.92). The 4 missed events start late in a record (after 6 minutes) and would be caught in the following one on continuous data. The 2 other flagged records were also real orders, cutting 4.5-5% of rated, just below the threshold; no record without an order was flagged. On the identified event records:
 
 | | Tower base | Blade flap | Shaft |
 |---|---|---|---|
-| Median DEL error, emulator A | 38% | 9% | 10% |
-| Median DEL error, emulator C | 6% | 5% | 6% |
-| Estimated / measured damage, A | 2.36 | 1.08 | 1.39 |
-| Estimated / measured damage, C | 0.88 | 0.95 | 0.87 |
+| Median DEL error, emulator A | 37% | 11% | 19% |
+| Median DEL error, emulator C | 5% | 7% | 7% |
+| Estimated / measured damage, A | 2.37 | 1.29 | 1.47 |
+| Estimated / measured damage, C | 0.87 | 0.91 | 0.91 |
 
 Emulator A overestimates tower damage during de-ratings by more than a factor of two, because it reads the pitched, high-speed state as a high-wind condition. Emulator C stays within about 13% on damage, with the remaining bias coming from the prototype-model differences (the stand-in for real model error).
 
@@ -143,7 +143,7 @@ Emulator A overestimates tower damage during de-ratings by more than a factor of
 
 - **Not OpenFAST.** Two structural degrees of freedom, quasi-steady BEM tables (no dynamic inflow or dynamic stall), rigid blades and drivetrain, rotor-effective wind instead of a full turbulence box, generic aerofoil polars (Cp max 0.46 vs 0.48 for the NREL 5 MW). The next step would be to generate the database with OpenFAST or the in-house tool and keep the same pipeline.
 - **The prototype is simulated.** It is the same model with changed parameters, so it tests robustness to model error, not to physics the model lacks. Part 3 adds a check on real measurements.
-- **Blade flap with m = 10** is dominated by a few high-wind records, and wind shear is not visible in nacelle SCADA, so flap damage on the simulated test set is underestimated (ratio 0.55). Tail-weighted training or a shear estimate (met mast, lidar or blade-load asymmetry) would help.
+- **Blade flap with m = 10** is dominated by a few high-wind records, and wind shear is not visible in nacelle SCADA, so flap damage on the simulated test set is underestimated (ratio 0.58). Tail-weighted training or a shear estimate (met mast, lidar or blade-load asymmetry) would help.
 - **Restorations** (ramping back up) and repeated orders in one record are not yet included.
 
 ### Files (`derating/`)
@@ -168,7 +168,7 @@ Simulated "field" data can only test robustness to model error. To test the meth
 
 **Results**
 
-- **Power shedding raised tower fore-aft fatigue.** Compared with the DEL expected from the mast wind speed and turbulence alone, shedding records had a median tower fore-aft DEL 19% higher (normal records: 0%). The simulations of Part 2 predicted the same direction below rated wind, where a reduction hands control of rotor speed to the pitch loop (about +25%). Side-side and shaft DELs did not change in the median.
+- **Power shedding raised tower fore-aft fatigue.** Compared with the DEL expected from the mast wind speed and turbulence alone, shedding records had a median tower fore-aft DEL 19% higher (normal records: 0%). The simulations of Part 2 predicted the same direction below rated wind, where a reduction hands control of rotor speed to the pitch loop (about +26%). Side-side and shaft DELs did not change in the median.
 - **Emulator trained on normal operation only (A) vs with shedding records and set-point features (C)**, on the shedding records:
 
 | | Tower FA | Tower SS | Shaft torque |

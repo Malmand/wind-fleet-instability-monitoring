@@ -23,7 +23,8 @@ TSR, PITCH, CP, CT, CMF = T["tsr"], T["pitch"], T["Cp"], T["Ct"], T["Cmf"]
 R, RHO, A, H_HUB, H_TWR = 63.0, 1.225, np.pi * 63.0 ** 2, 90.0, 87.6
 P_RATED, ETA, N_GEAR = 5.0e6, 0.944, 97.0
 W_RATED_G = 1173.7 * np.pi / 30            # rated generator speed (rad/s)
-W_MIN_G = 670.0 * np.pi / 30
+W_MIN_G = 670.0 * np.pi / 30              # minimum generator speed, region 1.5 starts here
+W_15 = 871.0 * np.pi / 30                 # region 1.5 ends, K w^2 starts (NREL 5 MW baseline)
 J_ROT = 38.76e6 + N_GEAR ** 2 * 534.1      # drivetrain inertia on the low-speed side (kg m2)
 J_GEN = 534.1
 
@@ -69,6 +70,8 @@ W_SYNC = W_RATED_G / 1.10
 SLOPE25 = TG_RATED / (0.99 * W_RATED_G - W_SYNC)
 # where K w^2 meets the region 2.5 line
 W_25 = (SLOPE25 - np.sqrt(SLOPE25 ** 2 - 4 * K_OPT * SLOPE25 * W_SYNC)) / (2 * K_OPT)
+# region 1.5: linear torque from zero at minimum speed up to the K w^2 curve, so the rotor never runs below ~6.9 rpm
+SLOPE15 = K_OPT * W_15 ** 2 / (W_15 - W_MIN_G)
 
 
 PI_GAINS = None
@@ -85,10 +88,11 @@ def lookup(tab, lam, beta):
 
 
 def torque_law(wg, p_ref, beta=0.0):
-    """Generator torque: optimal-mode gain, linear region 2.5, constant power above rated (as in the
-    NREL 5 MW baseline: region 3 once the speed reaches 99% of rated or the blades are pitched > 1 deg),
-    then capped by the operator power reference."""
+    """Generator torque as in the NREL 5 MW baseline: linear region 1.5 above minimum speed, optimal-mode
+    gain (region 2), linear region 2.5, constant power (region 3 once the speed reaches 99% of rated or the
+    blades are pitched > 1 deg), then capped by the operator power reference."""
     tg = np.where(wg < W_25, K_OPT * wg ** 2, np.minimum(SLOPE25 * (wg - W_SYNC), TG_RATED))
+    tg = np.where(wg < W_15, np.clip(SLOPE15 * (wg - W_MIN_G), 0, None), tg)    # region 1.5
     tg = np.where((wg >= 0.99 * W_RATED_G) | (beta >= 1.0), P_RATED / (ETA * wg), tg)
     return np.clip(np.minimum(tg, p_ref / (ETA * wg)), 0, None)
 
@@ -101,7 +105,7 @@ def _init():
 def steady_state(V, p_ref, prm):
     """Steady rotor speed and pitch for mean wind V and power reference p_ref (vectorised search)."""
     V = np.atleast_1d(V).astype(float); p_ref = np.broadcast_to(p_ref, V.shape).astype(float)
-    wr_grid = np.linspace(W_MIN_G / N_GEAR, W_RATED_G / N_GEAR, 400)
+    wr_grid = np.linspace(0.95 * W_MIN_G / N_GEAR, W_RATED_G / N_GEAR, 400)
     wr = np.empty_like(V); beta = np.zeros_like(V)
     cps = np.broadcast_to(np.asarray(prm["cp_scale"], float), V.shape)
     for k in range(V.size):
@@ -111,7 +115,7 @@ def steady_state(V, p_ref, prm):
         qg = N_GEAR * torque_law(wr_grid * N_GEAR, p_ref[k])
         d = qa - qg
         idx = np.where(np.diff(np.sign(d)) < 0)[0]
-        if d[-1] < 0 and idx.size and wr_grid[idx[-1]] * R / V[k] > 5.0:
+        if d[-1] < 0 and idx.size:
             wr[k] = wr_grid[idx[-1]]
             continue
         # speed limited at rated: pitch to match the power
@@ -125,8 +129,10 @@ def steady_state(V, p_ref, prm):
     return wr, beta
 
 
-def kaimal_wind(V, ti, n, dt, rng):
-    """Rotor-effective longitudinal wind: Kaimal spectrum (L = 340.2 m) with rotor averaging."""
+def kaimal_wind(V, ti, n, dt, rng, common=False):
+    """Rotor-effective longitudinal wind: Kaimal spectrum (L = 340.2 m) with rotor averaging.
+    common=True: every run in the batch gets the same random phases, so the gusts are identical
+    (scaled to each run's turbulence) and runs can be compared pairwise."""
     f = np.fft.rfftfreq(n, dt)[1:]
     L = 340.2
     sig = ti * V
@@ -134,13 +140,13 @@ def kaimal_wind(V, ti, n, dt, rng):
     S = sig[:, None] ** 2 * 4 * L / V[:, None] / (1 + 6 * f[None, :] * L / V[:, None]) ** (5 / 3)
     S = S / (1 + (f[None, :] * 2 * R / V[:, None]) ** 2)                    # rotor averaging
     amp = np.sqrt(S * f[0] / 2) * n  # one-sided PSD -> FFT amplitudes
-    ph = rng.uniform(0, 2 * np.pi, amp.shape)
+    ph = rng.uniform(0, 2 * np.pi, (1, amp.shape[1]) if common else amp.shape)
     spec = np.concatenate([np.zeros((V.size, 1)), amp * np.exp(1j * ph)], axis=1)
     u = np.fft.irfft(spec, n=n, axis=1)
     return V[:, None] + u
 
 
-def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0, dt=0.05):
+def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0, dt=0.05, common_wind=False):
     """Simulate a batch of runs. p0, p1 in W; rate in W/s (ramp from p0 to p1 starting at t0, s).
 
     The ramp starts from the electrical power at t0 (or p0 if lower), as a power-reference ramp would.
@@ -150,7 +156,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
     ti, p0, p1, rate, t0 = [np.broadcast_to(np.asarray(a, float), V.shape) for a in (ti, p0, p1, rate, t0)]
     rng = np.random.default_rng(seed)
     n = int(round((t_sim + t_spin) / dt))
-    U = kaimal_wind(V, ti, n, dt, rng)
+    U = kaimal_wind(V, ti, n, dt, rng, common=common_wind)
     t = np.arange(n) * dt - t_spin
     wr, beta = steady_state(V, p0, prm)
     wg_f = wr * N_GEAR

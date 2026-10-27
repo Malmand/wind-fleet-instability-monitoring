@@ -36,11 +36,11 @@ def sweep_cases():
 
 
 def run_sweeps():
-    """Each batch shares the same turbulence seed, so differences come from the transient only."""
+    """Every row of a batch gets the same gusts (common_wind), so differences come from the transient only."""
     c = sweep_cases()
     out = []
     for (V, seed), g in c.groupby(["V", "seed"]):
-        d, _ = db.run_cases(g, seed=int(5000 + seed), batch=len(g))   # same seed across the batch rows
+        d, _ = db.run_cases(g, seed=int(5000 + seed), batch=len(g), common_wind=True)   # identical gusts in every row
         out.append(d)
     return pd.concat(out, ignore_index=True)
 

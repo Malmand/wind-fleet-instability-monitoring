@@ -126,10 +126,6 @@ def fig5():
     save(fig, FIG / "fig5_field_validation.png")
 
 
-if __name__ == "__main__":
-    fig3(); fig4(); fig5(); fig6()
-
-
 def fig6():
     """Real measurements, Björkö 45 kW turbine."""
     r = pd.read_csv(RES / "bjorko_predictions.csv")
@@ -166,3 +162,7 @@ def fig6():
     for a, l in zip(ax, "ABC"):
         panel(a, l, x=-0.3)
     save(fig, FIG / "fig6_bjorko_measurements.png")
+
+
+if __name__ == "__main__":
+    fig3(); fig4(); fig5(); fig6()
