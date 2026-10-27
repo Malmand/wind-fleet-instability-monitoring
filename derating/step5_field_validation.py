@@ -84,15 +84,19 @@ def identify_events(Pw, pitch, wg):
 if __name__ == "__main__":
     cases = field_week()
     out, series = [], []
+    # simulate the prototype week in batches, with the prototype's own parameters
     for b0 in range(0, len(cases), 200):
         c = cases.iloc[b0:b0 + 200]
         prm = tb.default_params(shear=c.shear.values, **{k: c[k].values for k in PROTO})
         r = tb.simulate(c.V.values, c.TI_in.values, c.p0.values * tb.P_RATED, c.p1.values * tb.P_RATED,
                         c.rate.values * tb.P_RATED, c.t0.values, prm=prm, seed=90000 + b0)
+        # what the nacelle anemometer reports
         r["wind"] = r["wind"] * ANEMO
         std, tr = db.scada_features(r)
+        # 'measured' loads, including the strain-gauge calibration errors
         tgt = pd.DataFrame({f"DEL_{k}": [db.del_1hz(x, m) * GAUGE[f'DEL_{k}'] for x in r[k]]
                             for k, m in db.M_SLOPE.items()})
+        # find the orders from power, pitch and speed only
         flag, start = identify_events(r["P"], r["pitch"], r["wg"])
         ev = pd.DataFrame(dict(detected=flag, t_detect=start))
         out.append(pd.concat([c.reset_index(drop=True), std, tr, tgt, ev], axis=1))
@@ -102,6 +106,7 @@ if __name__ == "__main__":
     f["P_avail"] = available_power(f.V, PROTO["cp_scale"])   # what the prototype rotor can actually deliver
     # a commanded reduction that actually cuts output: below the available power by at least 5% of rated
     f["effective"] = (f.kind == "derate") & (np.minimum(f.p0, f.P_avail) - f.p1 >= 0.05)
+    # the emulators trained in step 4 on the design turbine
     models = pickle.load(open(OUT / "emulators.pkl", "rb"))
     names = list(models)
     for tag, name in (("A", names[0]), ("C", names[2])):
@@ -111,6 +116,7 @@ if __name__ == "__main__":
     f.to_csv(OUT / "field_validation.csv", index=False)
     pickle.dump(series[0], open(OUT / "field_example_series.pkl", "wb"))
 
+    # detection scored against the orders that really cut output
     tp = (f.detected & f.effective).sum(); fp = (f.detected & ~f.effective).sum(); fn = (~f.detected & f.effective).sum()
     print(f"records {len(f)}, commanded de-ratings {int((f.kind == 'derate').sum())}, effective {int(f.effective.sum())}")
     print(f"detection: {tp} found, {fn} missed, {fp} false alarms "

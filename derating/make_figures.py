@@ -44,6 +44,7 @@ def fig3():
     save(fig, FIG / "fig3_derating_transient.png")
 
 
+# emulator accuracy on held-out cases, and the sweeps
 def fig4():
     te = pd.read_csv(RES / "emulator_test_predictions.csv")
     sc = pd.read_csv(RES / "emulator_scores.csv")
@@ -70,6 +71,7 @@ def fig4():
     a.set_xticks(range(3)); a.set_xticklabels(["Tower base", "Blade-root flap", "Shaft torque"])
     a.set_ylabel("90th-percentile DEL error (%)")
     a.legend(frameon=False, title="Emulator", title_fontsize=7)
+    # ratios to the no-order run in the same wind and seed
     base = sw[sw.sweep == "none"].set_index(["V", "seed"])
     for a, t, lab in ((ax[1, 0], "DEL_Mtb", "Tower-base DEL"), (ax[1, 1], "DEL_Qlss", "Shaft-torque DEL")):
         g = sw[sw.sweep == "p1"].copy()

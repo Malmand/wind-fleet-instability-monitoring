@@ -28,6 +28,7 @@ def records(con, start=None, end=None, farm=None, state=None, min_wind=None):
     """Parameterised query of 10-min records."""
     sql = "SELECT * FROM scada WHERE 1=1"  # so every filter can start with AND
     args = []
+    # one condition per filter given; values go in as parameters, never into the SQL text
     for col, op, val in [("ts", ">=", start), ("ts", "<", end), ("farm", "=", farm), ("state", "=", state),
                          ("wind_mean", ">=", min_wind)]:
         if val is not None:

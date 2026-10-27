@@ -18,6 +18,7 @@ def main():
     bad = rng.random(len(s)) < 0.002                          # wind sensor faults
     s.loc[bad, "wind_mean"] = -999.0
     os.makedirs(os.path.dirname(db.DB), exist_ok=True)
+    # rebuilt from scratch on every run
     if os.path.exists(db.DB):
         os.remove(db.DB)
     with db.connect() as con:

@@ -17,9 +17,11 @@ response to power transients, not certified load levels.
 import numpy as np
 from pathlib import Path
 
+# steady C_P, C_T and flap tables from bem.py, on a (tip-speed ratio, pitch) grid
 T = np.load(Path(__file__).parent / "aero_tables.npz")
 TSR, PITCH, CP, CT, CMF = T["tsr"], T["pitch"], T["Cp"], T["Ct"], T["Cmf"]
 
+# NREL 5 MW reference turbine values (Jonkman et al., 2009)
 R, RHO, A, H_HUB, H_TWR = 63.0, 1.225, np.pi * 63.0 ** 2, 90.0, 87.6
 P_RATED, ETA, N_GEAR = 5.0e6, 0.944, 97.0
 W_RATED_G = 1173.7 * np.pi / 30            # rated generator speed (rad/s)
@@ -33,6 +35,7 @@ def pitch_schedule(wn=0.6, zeta=0.7):
     """Gain-scheduled PI pitch gains by pole placement (Jonkman et al., 2009, sec. 7.4; ROSCO-style
     look-up table): the pitch sensitivity of aerodynamic power of this rotor is computed at the steady
     above-rated operating points and the gains are scheduled on blade pitch."""
+    # rotor speed (rad/s) that the pitch loop holds above rated
     wr = W_RATED_G / N_GEAR
     th, sens = [], []
     for V in np.arange(11.0, 25.51, 0.5):
@@ -43,6 +46,7 @@ def pitch_schedule(wn=0.6, zeta=0.7):
         ok = np.where(cp >= target)[0]
         if not ok.size:
             continue
+        # steady pitch at this wind; kept above 0.5 deg so the difference below stays on the table
         t0 = max(b[ok[-1]], 0.5)
         d = 0.5 * RHO * A * V ** 3 * (lookup(CP, lam, np.array([t0 + 0.5])) - lookup(CP, lam, np.array([t0 - 0.5])))
         th.append(t0); sens.append(d[0] / np.radians(1.0))
@@ -55,12 +59,14 @@ def pitch_schedule(wn=0.6, zeta=0.7):
 
 
 def default_params(**kw):
+    # tower first mode: frequency (Hz), damping ratio, modal mass (kg); the scale factors change the prototype
     p = dict(f_twr=0.324, zeta_twr=0.01, m_twr=4.37e5, cp_scale=1.0, gain_scale=1.0, shear=0.2,
              pitch_rate=8.0)
     p.update(kw)
     return p
 
 
+# best power coefficient at zero pitch: it sets the light-wind torque gain
 i_opt, j_opt = np.unravel_index(np.argmax(np.where(PITCH[None, :] == 0.0, CP, -1)), CP.shape)
 TSR_OPT, CP_MAX = TSR[i_opt], CP[i_opt, j_opt]
 K_OPT = 0.5 * RHO * A * R ** 3 * CP_MAX / TSR_OPT ** 3 / N_GEAR ** 3   # generator-side K (N m s2)
@@ -108,12 +114,14 @@ def steady_state(V, p_ref, prm):
     wr_grid = np.linspace(0.95 * W_MIN_G / N_GEAR, W_RATED_G / N_GEAR, 400)
     wr = np.empty_like(V); beta = np.zeros_like(V)
     cps = np.broadcast_to(np.asarray(prm["cp_scale"], float), V.shape)
+    # one wind speed at a time; this only gives the starting state, so speed doesn't matter here
     for k in range(V.size):
         # region 2: find speed where aero torque balances generator torque at zero pitch
         lam = wr_grid * R / V[k]
         qa = 0.5 * RHO * A * V[k] ** 3 * cps[k] * lookup(CP, lam, 0 * lam) / wr_grid
         qg = N_GEAR * torque_law(wr_grid * N_GEAR, p_ref[k])
         d = qa - qg
+        # stable balance point: wind torque wins just below it, generator torque just above
         idx = np.where(np.diff(np.sign(d)) < 0)[0]
         if d[-1] < 0 and idx.size:
             wr[k] = wr_grid[idx[-1]]
@@ -133,6 +141,7 @@ def kaimal_wind(V, ti, n, dt, rng, common=False):
     """Rotor-effective longitudinal wind: Kaimal spectrum (L = 340.2 m) with rotor averaging.
     common=True: every run in the batch gets the same random phases, so the gusts are identical
     (scaled to each run's turbulence) and runs can be compared pairwise."""
+    # positive frequencies only; the mean wind is added back at the end
     f = np.fft.rfftfreq(n, dt)[1:]
     L = 340.2
     sig = ti * V
@@ -141,6 +150,7 @@ def kaimal_wind(V, ti, n, dt, rng, common=False):
     S = S / (1 + (f[None, :] * 2 * R / V[:, None]) ** 2)                    # rotor averaging
     amp = np.sqrt(S * f[0] / 2) * n  # one-sided PSD -> FFT amplitudes
     ph = rng.uniform(0, 2 * np.pi, (1, amp.shape[1]) if common else amp.shape)
+    # nothing at f = 0, so the gusts average out over the record
     spec = np.concatenate([np.zeros((V.size, 1)), amp * np.exp(1j * ph)], axis=1)
     u = np.fft.irfft(spec, n=n, axis=1)
     return V[:, None] + u
@@ -155,27 +165,34 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
     V = np.atleast_1d(np.asarray(V, float)); nb = V.size
     ti, p0, p1, rate, t0 = [np.broadcast_to(np.asarray(a, float), V.shape) for a in (ti, p0, p1, rate, t0)]
     rng = np.random.default_rng(seed)
+    # 60 s of spin-up first, cut from the outputs, so start-up wobbles don't count as fatigue
     n = int(round((t_sim + t_spin) / dt))
     U = kaimal_wind(V, ti, n, dt, rng, common=common_wind)
     t = np.arange(n) * dt - t_spin
+    # start from the steady state for the mean wind and the initial power limit
     wr, beta = steady_state(V, p0, prm)
     wg_f = wr * N_GEAR
+    # tower as a mass on a spring: stiffness from the frequency, damping from the ratio
     k_t = prm["m_twr"] * (2 * np.pi * prm["f_twr"]) ** 2
     c_t = 2 * prm["zeta_twr"] * np.sqrt(k_t * prm["m_twr"])
     lam0 = wr * R / V
     x = 0.5 * RHO * A * V ** 2 * lookup(CT, lam0, beta) / k_t  # start at the static tower deflection
+    # tower-top velocity, and rotor azimuth for the once-per-turn shear term
     xd = np.zeros(nb); psi = np.zeros(nb)
     th_s, kp_s, ki_s = PI_GAINS
     integ = np.radians(beta)                                  # integral term, stored in pitch units (rad)
     a_f = np.exp(-2 * np.pi * 0.25 * dt)                      # 0.25 Hz speed filter
+    # power-law wind at 0.7 R above and below the hub; the difference drives the flap 1P cycle
     shear_up = (1 + 0.7 * R / H_HUB) ** prm["shear"]; shear_dn = (1 - 0.7 * R / H_HUB) ** prm["shear"]
     s_amp = (shear_up ** 2 - shear_dn ** 2) / 2              # 1P amplitude of the flap moment (relative)
+    # outputs: SCADA-like signals at 1 Hz, loads at 10 Hz
     every_scada, every_load = int(round(1 / dt)), int(round(0.1 / dt))
     keep = t >= 0
     out = {k: [] for k in ("P", "wg", "pitch", "wind", "pref")}
     ld = {k: [] for k in ("Mtb", "Mflap", "Qlss")}
     p_start = np.full(nb, np.nan)          # the ramp starts from the power being produced when the order arrives
     p_el = np.zeros(nb)
+    # ---- time loop: every run in the batch steps forward together
     for s in range(n):
         ts = t[s]
         arm = (ts >= t0) & np.isnan(p_start)
@@ -205,6 +222,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
         xd = xd + xdd * dt; x = x + xd * dt  # semi-implicit Euler
         wr = np.maximum(wr + wr_dot * dt, 0.1)
         psi = psi + wr * dt
+        # store only after the spin-up
         if keep[s]:
             if s % every_load == 0:
                 ld["Mtb"].append(k_t * x * H_TWR / 1e3)                                       # kNm
@@ -214,6 +232,7 @@ def simulate(V, ti, p0, p1, rate, t0, prm=None, seed=0, t_sim=600.0, t_spin=60.0
             if s % every_scada == 0:
                 out["P"].append(ETA * tg * wg); out["wg"].append(wg * 30 / np.pi)
                 out["pitch"].append(beta.copy()); out["wind"].append(U[:, s]); out["pref"].append(p_ref)
+    # every output as an array of shape (runs, samples)
     res = {k: np.array(v).T for k, v in out.items()}
     res.update({k: np.array(v).T for k, v in ld.items()})
     return res

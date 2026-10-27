@@ -136,6 +136,7 @@ def main():
         sys.exit("No 'Time' column found; please send bjorko_header.txt")
     rows, carry = [], None
     cand = []                      # (score, t0, kind) for window extraction in a second pass
+    # read in 2-million-row chunks: the file is far too big to load at once
     reader = pd.read_csv(SRC, sep=delim, usecols=use, chunksize=2_000_000, low_memory=False)
     for k, ch in enumerate(reader):
         ch = to_seconds(ch)
@@ -145,6 +146,7 @@ def main():
         last = rec.max()
         carry = ch[rec == last]  # last record may continue in the next chunk
         ch = ch[rec < last]; rec = rec[rec < last]
+        # one 10-minute record at a time
         for t0, g in ch.groupby(rec):
             if len(g) < MIN_FILL * REC * FS:
                 continue

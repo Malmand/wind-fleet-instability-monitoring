@@ -34,6 +34,7 @@ def turbines():
 
 
 def power_curve(v):
+    # cubic rise from cut-in to rated, then flat; zero outside 3 to 25 m/s
     p = np.clip((v - 3) / (12 - 3), 0, 1) ** 3 * 4000  # cut-in 3, rated 12 m/s, 4000 kW
     return np.where((v < 3) | (v > 25), 0.0, p)
 
@@ -44,6 +45,7 @@ def scada(days=14, seed=5):
     n = days * 144
     t = pd.date_range("2026-09-01", periods=n, freq="10min")
     out = []
+    # one wind history per farm; each turbine gets a slightly different copy
     for farm in FARMS:
         # farm wind: AR(1) around a slowly varying mean with two storms
         base = 9 + 3 * np.sin(np.arange(n) / 144 * 2 * np.pi / 5)
@@ -53,11 +55,13 @@ def scada(days=14, seed=5):
         for i in range(1, n):
             x[i] = 0.97 * x[i - 1] + rng.normal(0, 0.6)  # AR(1) gusts, 10-min steps
         v_farm = np.clip(base + x, 0, None)
+        # eight grid curtailment periods of 2 to 6 hours, rotors idling
         curtail = np.zeros(n, bool)
         for c in rng.choice(n - 36, 8, replace=False):                 # grid curtailment: rotor idling
             curtail[c:c + int(rng.integers(12, 36))] = True
         for tb in turbines().query("farm == @farm").itertuples():
             v = np.clip(v_farm * rng.uniform(0.93, 1.07) + rng.normal(0, 0.4, n), 0, None)  # turbine-to-turbine spread
+            # idle above cut-out, during curtailment and below cut-in
             state = np.where(v > 25, "idle", np.where(curtail, "idle", np.where(v < 3, "idle", "production")))
             maint = rng.random(n) < 0.004
             state = np.where(maint, "stop", state)
@@ -93,10 +97,12 @@ def hf_signal(row, seed):
     # turbulent response of a linear resonator (discretised 2nd-order system)
     r = np.exp(-z * w / FS) if z > 0 else np.exp(-0.002 * w / FS)  # pole radius; growth handled below
     a = [1, -2 * r * np.cos(w / FS), r * r]
+    # random forcing, stronger in strong and gusty wind
     drive = rng.normal(0, 1, n) * (row.wind_mean ** 2) * row.ti * 14.0
     m = lfilter([1], a, drive) * (1 - r)  # (1 - r) normalises the resonant peak
     if row.state == "production":                              # gravity at 1P
         m += 2500 * np.sin(2 * np.pi * row.rotor_rpm / 60 * t + rng.uniform(0, 2 * np.pi))
+    # negative total damping: growth that saturates in a limit cycle (logistic envelope)
     unstable = z < 0
     if unstable:
         sigma = -z * w

@@ -24,6 +24,7 @@ def main():
     with db.connect() as con:
         recs = db.records(con)
         rows, truth = [], []
+        # run the tool record by record; the simulator's truth is kept aside, for checking only
         for r in recs.itertuples():
             x, unstable, z = db.get_signal(r)
             out = analyse_record(r._asdict(), x, FS)
@@ -34,6 +35,7 @@ def main():
         weekly = db.events_by_week(con)
         avail = db.availability(con)
     res = res.merge(pd.DataFrame(truth), on=["ts", "turbine"]).merge(recs, on=["ts", "turbine"])
+    # only records that passed the quality checks count from here on
     ok = res[res.qc_ok.astype(bool)].copy()
     ok["event"] = ok["event"].astype(bool)
 

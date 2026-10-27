@@ -20,8 +20,10 @@ N_EQ = 600                 # equivalent cycles for a 1 Hz damage-equivalent load
 def quality(row, x, fs):
     """Returns a list of data-quality issues for the record (empty = usable)."""
     issues = []
+    # under 90 % of the expected samples counts as lost data
     if not np.isfinite(x).all() or len(x) < 0.9 * 600 * fs:
         issues.append("missing samples")
+    # no movement at all in the first or last minute: sensor stuck
     if np.nanstd(x[: int(60 * fs)]) < 1e-3 or np.nanstd(x[-int(60 * fs):]) < 1e-3:
         issues.append("flat-lined sensor")
     if not (0 <= row["wind_mean"] <= 50):
@@ -91,8 +93,10 @@ def damage(x):
 
 
 def analyse_record(row, x, fs):
+    # the whole chain for one record: checks, despiking, detection, fatigue
     issues = quality(row, x, fs)
     out = dict(qc_ok=not issues, qc_issues="; ".join(issues), spikes_removed=0)
+    # unusable records are flagged and skipped, never guessed
     if issues:
         return out
     x, out["spikes_removed"] = despike(np.asarray(x, float))

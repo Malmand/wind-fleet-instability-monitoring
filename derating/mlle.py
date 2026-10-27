@@ -9,6 +9,7 @@ TARGETS = {"DEL_Mtb": 4, "DEL_Mflap": 10, "DEL_Qlss": 4}
 LABEL = {"DEL_Mtb": "Tower-base fore-aft", "DEL_Mflap": "Blade-root flap", "DEL_Qlss": "Low-speed shaft torque"}
 
 
+# one XGBoost model per load channel, all sharing the same inputs
 class Emulator:
     def __init__(self, features, seed=0):
         self.features, self.seed, self.models = list(features), seed, {}

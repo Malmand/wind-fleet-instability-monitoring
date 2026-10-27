@@ -47,7 +47,9 @@ def run_sweeps():
 
 if __name__ == "__main__":
     df = pd.read_csv(OUT / "sim_database.csv")
+    # the same held-out cases are used to score all three emulators
     tr, te = split(df)
+    # A only ever sees normal operation, like an emulator built before grid services
     trN = tr[tr.kind == "normal"]
     models = {
         "A: normal operation only": mlle.Emulator(mlle.STD).fit(trN),
@@ -70,6 +72,7 @@ if __name__ == "__main__":
     te.assign(**{f"pred_A_{t}": preds[list(models)[0]][t] for t in mlle.TARGETS},
               **{f"pred_C_{t}": preds[list(models)[2]][t] for t in mlle.TARGETS}).to_csv(OUT / "emulator_test_predictions.csv", index=False)
 
+    # controlled sweeps, then ask A and C to predict the same cases
     sw = run_sweeps()
     pC = models[list(models)[2]].predict(sw)
     pA = models[list(models)[0]].predict(sw)

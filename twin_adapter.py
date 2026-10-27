@@ -20,6 +20,7 @@ OUTPUT_SCHEMA = {"qc_ok": bool, "qc_issues": str, "spikes_removed": int, "event"
 def run(payload: str) -> str:
     req = json.loads(payload)
     out = analyse_record(req["scada"], np.asarray(req["signal"], float), float(req["fs"]))
+    # same keys and types every time, whatever the record contained
     clean = {}
     for k, typ in OUTPUT_SCHEMA.items():
         v = out.get(k)

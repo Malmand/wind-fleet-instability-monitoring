@@ -22,9 +22,11 @@ def ti_ntm(V, rng, scale=(0.6, 1.3)):
 def sample_cases(n_normal, n_derate, seed):
     rng = np.random.default_rng(seed)
     rows = []
+    # normal operation: full power allowed and the order never comes (t0 = 1e9)
     V = rng.uniform(4, 25, n_normal)
     for v, ti, sh in zip(V, ti_ntm(V, rng), rng.uniform(0.1, 0.3, n_normal)):
         rows.append(dict(kind="normal", V=v, TI_in=ti, shear=sh, p0=1.0, p1=1.0, rate=0.0, t0=1e9))
+    # de-ratings: random starting level, target, ramp rate and time of the order
     V = rng.uniform(4, 25, n_derate)
     for v, ti, sh in zip(V, ti_ntm(V, rng), rng.uniform(0.1, 0.3, n_derate)):
         p0 = 1.0 if rng.random() < 0.6 else rng.uniform(0.5, 0.9)         # unconstrained or already curtailed
@@ -73,9 +75,11 @@ def run_cases(cases, prm_cols=(), seed=0, batch=200, keep_series=False, common_w
     out, series = [], []
     for b0 in range(0, len(cases), batch):
         c = cases.iloc[b0:b0 + batch]
+        # per-case shear, plus any model changes (used for the stand-in prototype)
         prm = tb.default_params(shear=c.shear.values, **{k: c[k].values for k in prm_cols})
         r = tb.simulate(c.V.values, c.TI_in.values, c.p0.values * P, c.p1.values * P, c.rate.values * P,
                         c.t0.values, prm=prm, seed=seed + b0, common_wind=common_wind)
+        # what a SCADA system would see, and the fatigue it can't see
         std, tr = scada_features(r)
         tgt = pd.DataFrame({f"DEL_{k}": [del_1hz(x, m) for x in r[k]] for k, m in M_SLOPE.items()})
         tgt["Mtb_range"] = np.ptp(r["Mtb"], axis=1)          # extreme-load indicator (kNm)
