@@ -1,10 +1,11 @@
 # Wind Fleet Monitoring: Edgewise Instability Detection, Fatigue Impact and KPIs
 
-Two parts:
+Four parts:
 
 1. **Fleet monitoring** of one type of aeroelastic event, edgewise blade instability of idling turbines (steps 1-2 below).
 2. **Load emulator for power de-rating transients** (`derating/`, steps 3-5): a reduced-order aero-servo-elastic turbine model, a simulation database, a machine-learning load emulator extended to commanded power reductions, and validation against field-like prototype data. See [Part 2](#part-2-load-emulator-for-power-de-rating-transients).
 3. **Check on real measurements** (step 6): measured tower and shaft loads of a research turbine during frequency-control power shedding. See [Part 3](#part-3-check-on-real-measurements-bjorko-45-kw-turbine).
+4. **Instability conditions on real SCADA** (step 7): how often parked turbines of a real UK wind farm sat in strong wind and off the wind, and why. See [Part 4](#part-4-instability-conditions-on-real-scada-penmanshiel).
 
 ## Part 1: fleet monitoring
 
@@ -24,6 +25,7 @@ pip install -r requirements.txt
 python step1_build_database.py    # SQLite database with 23,846 10-min records
 python step2_monitor_fleet.py     # about 2 min
 python tests/test_tool.py         # or: python -m pytest -q tests
+python step7_penmanshiel_exposure.py  # Part 4, real SCADA (condensed files included in data/)
 
 cd derating                       # Part 2
 python step3_derating_database.py # 2,500 10-min simulations, about 1 min
@@ -46,7 +48,7 @@ Because the true state of each record is known, detection, damping estimates and
 
 ### Results (14 days, 12 turbines)
 
-**Detection.** Of 54 instability events large enough to reach the 800 kNm threshold, 53 were detected, with no false alarms. A further 9 records were unstable but grew too slowly to cross the threshold within 10 minutes. The damping estimated from the growth of the envelope (logistic fit) matches the true total damping within 0.02 percentage points on average.
+**Detection.** Of 54 instability events large enough to reach the 800 kNm threshold, 53 were detected, with no false alarms. A further 9 records were unstable but grew too slowly to cross the threshold within 10 minutes. The damping estimated from the growth of the envelope (logistic fit) matches the true total damping within about 0.01 percentage points on average (largest error 0.04 points).
 
 **Fatigue.** Across the fleet, instabilities (time with the envelope above the threshold) cover only **0.17% of the time but cause 61% of the edgewise fatigue damage**; on platform SG-B alone, the only platform with events, they cover 0.33% of the time and cause 76% of its damage. During an instability, damage accumulates about 950 times faster per hour than in normal operation (about 690 times per 10-min record), because the high S-N slope weighs large cycles so heavily. Per turbine the event share ranges from 35% to 92%. Events are flagged high priority when they reach the limit cycle (peak above 4,000 kNm) or when one record does more damage than a week of normal operation.
 
@@ -86,6 +88,8 @@ monitoring.py             quality checks, despiking, detection, features, rainfl
 twin_adapter.py           JSON interface for digital-twin integration
 step1_build_database.py   builds the database
 step2_monitor_fleet.py    fleet run, detection check, fatigue, KPIs, weekly summary, figures
+step7_penmanshiel_exposure.py  Part 4: instability conditions on real SCADA
+tools/prepare_penmanshiel.py   condenses the Zenodo SCADA export into data/penmanshiel_*.csv.gz
 tests/test_tool.py        consistency tests
 ```
 
@@ -185,3 +189,25 @@ Simulated "field" data can only test robustness to model error. To test the meth
 *A: tower fore-aft DEL relative to the value expected from ambient wind, normal vs power-shed records (median and interquartile range). B: shaft-torque DEL on shedding records, measured vs estimated. C: 90th-percentile DEL error on shedding records.*
 
 **Limits.** A 45 kW turbine with a wooden tower is far from a multi-megawatt platform, the shedding tests cover 7 days, and the blade-root strain gauges in this dataset are uncalibrated, so blade loads are not used.
+
+## Part 4: instability conditions on real SCADA (Penmanshiel)
+
+Part 1 runs on a simulated fleet because blade-load data from a fleet is not public. The conditions that make a parked blade lose edgewise damping only need SCADA, though: rotor stopped, strong wind, rotor well off the wind. So these can be checked on real data. I used the open SCADA and status logs of five Senvion MM82 turbines (2 MW, 82 m rotor) at the Penmanshiel wind farm in Scotland (Plumley, Zenodo, [doi:10.5281/zenodo.8253010](https://doi.org/10.5281/zenodo.8253010), CC BY 4.0). `tools/prepare_penmanshiel.py` condenses the 2016 export for turbines 11-15 into `data/penmanshiel_10min.csv.gz` (seven signals) and `data/penmanshiel_stops.csv.gz` (stop log).
+
+**Method.** The analysis starts on the first day all five turbines report at least 90% of their records (21 August 2016, after commissioning) and runs to the end of the year: 133 days, about 16,000 turbine-hours. A record counts as parked when the rotor turns below 1 rpm with no power export. In this export the wind direction is the nacelle position plus the vane reading, so the vane gives the yaw misalignment directly. The risk zone uses the limits of the Part 1 damping map: parked, wind above 14 m/s, misalignment 20-50°. Each parked high-wind record is matched with the stop active at the time; consecutive risk-zone records form episodes, and each episode reports whether the nacelle moved.
+
+**Results**
+
+- **Parked in strong wind:** 56 hours in total (0.35% of turbine-hours). The logged reasons were mostly high-wind cut-out, safety-chain faults and manual stops; 10 records were stops for tower oscillation.
+- **In the risk zone:** 12 hours, and 9.3 of them on one turbine. WT14 was stopped by a safety-chain fault from 26 to 31 August and its nacelle did not move for the whole stop. When a front came through on 30 August, the wind veered away from the frozen nacelle and the parked rotor sat 20-38° off the wind in winds up to 20 m/s. On the other four turbines the yaw kept tracking while parked, and the risk zone added up to less than an hour each.
+- **Data quality:** 1-5% of records missing per turbine. WT15 was stopped for about 21 hours above 14 m/s, most of it in the storm of 21-22 November, with no stop in its status log, which a monitoring tool should flag rather than trust.
+
+So the exposure is not spread evenly over the fleet: it comes from faults that leave a turbine parked without yaw control. A simple SCADA rule (parked, strong wind, misaligned, nacelle not moving) finds these periods; on a platform with known standstill instabilities it would trigger a yaw intervention or a blade inspection.
+
+![Penmanshiel exposure](figures/fig7_penmanshiel_exposure.png)
+
+*A: yaw misalignment against wind speed for every parked 10-min record, by turbine, with the risk zone shaded. B: the longest risk episode (WT14, 30-31 August 2016): the nacelle stays at 241° while the wind direction moves; grey shading marks the parked rotor, the dotted line 14 m/s.*
+
+**Limits.** This dataset has no blade loads, so it measures exposure, not events: nothing shows that these blades vibrated, and edgewise standstill instabilities mainly affect much longer blades than the 40 m blades of the MM82. The risk-zone limits come from the simulated damping map of Part 1, not from this turbine type. Wind speed and direction are measured on top of the nacelle, behind the stopped rotor, so they are approximate when the rotor is far off the wind. The period covers the first five months after commissioning, which may have more faults than a mature farm.
+
+Outputs: `results/penmanshiel_exposure.csv` (per turbine: records, missing data, parked time, exposure hours, risk hours, unlogged stops) and `results/penmanshiel_risk_episodes.csv`.
