@@ -58,6 +58,7 @@ def main():
     # --- fatigue impact
     dmg_event = ev.damage.sum()
     dmg_total = ok.damage.sum()
+    # event time = time with the envelope above the threshold, not the whole 10-min record
     hours_event = ev.duration_s.sum() / 3600
     hours_total = len(ok) / 6  # six 10-min records per hour
     fat = dict(event_share_of_damage_pct=100 * dmg_event / dmg_total,
