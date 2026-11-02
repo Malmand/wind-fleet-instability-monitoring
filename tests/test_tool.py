@@ -80,7 +80,17 @@ def test_quality_checks_flag_bad_records():
     assert "wind out of range" in monitoring.quality(dict(wind_mean=-999.0), np.random.randn(3000), 5.0)
 
 
+def test_despike_removes_spikes_but_keeps_the_signal():
+    t = np.arange(3000) / 5.0
+    clean = 2500 * np.sin(2 * np.pi * 0.2 * t) + 50 * np.random.default_rng(1).normal(size=t.size)  # gravity 1P + noise
+    x = clean.copy()
+    x[[500, 1500, 2500]] += 9000                                       # three spikes
+    y, n = monitoring.despike(x)
+    assert n == 3 and np.abs(y - clean).max() < 200      # spikes gone, the gravity cycle untouched
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
             fn(); print("ok", name)
+

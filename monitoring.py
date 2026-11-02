@@ -32,14 +32,23 @@ def quality(row, x, fs):
 
 
 def despike(x, k=8.0):
-    """Replace isolated samples further than k robust standard deviations from a rolling median."""
-    from scipy.ndimage import median_filter
-    med = median_filter(x, size=9, mode="nearest")
-    dev = np.abs(x - med)
-    mad = np.median(dev) * 1.4826 + 1e-9  # MAD -> robust sd
+    """Replace isolated single-sample spikes by interpolating between their neighbours.
+
+    A sample is a spike when it sticks out from the mean of its two neighbours by more than k robust
+    standard deviations (plus 500 kNm), and sticks out more than either neighbour does. Comparing with
+    the neighbours, not a rolling median, leaves smooth peaks (gravity 1P, the edgewise mode) alone."""
+    x = np.asarray(x, float)
+    d = np.zeros_like(x)
+    d[1:-1] = x[1:-1] - 0.5 * (x[:-2] + x[2:])          # how far each sample sticks out from its neighbours
+    a = np.abs(d)
+    scale = np.median(a) * 1.4826 + 1e-9                 # robust spread of that, for this record
+    local_max = np.zeros(x.size, bool)
+    local_max[1:-1] = (a[1:-1] >= a[:-2]) & (a[1:-1] >= a[2:])   # neighbours of a spike stick out less
+    bad = (a > k * scale + 500) & local_max              # +500 kNm: ignore small blips on quiet records
     y = x.copy()
-    bad = dev > k * mad + 500  # +500 kNm: ignore small deviations on quiet records
-    y[bad] = med[bad]
+    if bad.any() and (~bad).sum() > 1:
+        idx = np.arange(x.size)
+        y[bad] = np.interp(idx[bad], idx[~bad], x[~bad])
     return y, int(bad.sum())
 
 
